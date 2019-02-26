@@ -728,17 +728,16 @@ func (t *TricksterHandler) originRangeProxyHandler(cacheKey string, originRangeR
 
 			body, resp, _, err := t.getURL(t.getOrigin(r.Request), r.Request.Method, queryURL, originParams, getProxyableClientHeaders(r.Request))
 			if err != nil {
-				level.Error(t.Logger).Log(lfEvent, "error fetching data from origin Prometheus", lfDetail, err.Error())
+				level.Error(t.Logger).Log(lfEvent, "error fetching data from origin Prometheus", err.Error())
 				r.Writer.WriteHeader(http.StatusBadGateway)
-				return
-			}
+			} else {
+				for k, v := range resp.Header {
+					r.Writer.Header().Set(k, strings.Join(v, ","))
+				}
 
-			for k, v := range resp.Header {
-				r.Writer.Header().Set(k, strings.Join(v, ","))
+				r.Writer.WriteHeader(resp.StatusCode)
+				r.Writer.Write(body)
 			}
-
-			r.Writer.WriteHeader(resp.StatusCode)
-			r.Writer.Write(body)
 		} else {
 
 			// Now we know if we need to make any calls to the Origin, lets set those up
