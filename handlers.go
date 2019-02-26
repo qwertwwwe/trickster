@@ -74,6 +74,7 @@ const (
 	crHit        = "hit"
 	crPartialHit = "phit"
 	crPurge      = "purge"
+	crNotCache   = "notcache"
 )
 
 // TricksterHandler contains the services the Handlers need to operate
@@ -573,12 +574,19 @@ func (t *TricksterHandler) buildRequestContext(w http.ResponseWriter, r *http.Re
 			extent = "upper"
 		} else if ctx.RequestExtents.End < ce.Start {
 			// Range Miss on the Lower Extent of Cache. We will fill from the requested start up to where our cached data stops
-			ctx.CacheLookupResult = crRangeMiss
-			ctx.OriginLowerExtents.Start = ((ctx.RequestExtents.Start / ctx.StepMS) * ctx.StepMS)
-			ctx.OriginLowerExtents.End = ce.Start - ctx.StepMS
-			ctx.OriginUpperExtents.Start = 0
-			ctx.OriginUpperExtents.End = 0
-			extent = "lower"
+			if (ctx.RequestExtents.End <= (ctx.Time-ctx.Origin.MaxValueAgeSecs)*1000) || (ce.Start-ctx.RequestExtents.End > ctx.Origin.MaxExtendRangeSecs*1000) {
+				ctx.CacheLookupResult = crNotCache
+				ctx.OriginLowerExtents.Start = ctx.RequestExtents.Start
+				ctx.OriginLowerExtents.End = ctx.RequestExtents.End
+				extent = "lower"
+			} else {
+				ctx.CacheLookupResult = crRangeMiss
+				ctx.OriginLowerExtents.Start = ((ctx.RequestExtents.Start / ctx.StepMS) * ctx.StepMS)
+				ctx.OriginLowerExtents.End = ce.Start - ctx.StepMS
+				ctx.OriginUpperExtents.Start = 0
+				ctx.OriginUpperExtents.End = 0
+				extent = "lower"
+			}
 		} else if ctx.RequestExtents.Start < ce.Start {
 			// Partial Cache Hit, Missing Lower Extent
 			ctx.CacheLookupResult = crPartialHit
@@ -708,6 +716,9 @@ func (t *TricksterHandler) originRangeProxyHandler(cacheKey string, originRangeR
 			r.CacheLookupResult = crHit
 			// Respond with the modified original request object so the right WaitGroup is marked as Done()
 			t.respondToCacheHit(r)
+		} else if ctx.CacheLookupResult == crNotCache {
+			// just proxy the query request to origin prometheus.
+			t.promFullProxyHandler(r.Writer, r.Request)
 		} else {
 
 			// Now we know if we need to make any calls to the Origin, lets set those up

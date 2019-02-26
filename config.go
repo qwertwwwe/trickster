@@ -93,6 +93,7 @@ type PrometheusOriginConfig struct {
 	FastForwardDisable  bool   `toml:"fast_forward_disable"`
 	NoCacheLastDataSecs int64  `toml:"no_cache_last_data_secs"`
 	TimeoutSecs         int64  `toml:"timeout_secs"`
+	MaxExtendRangeSecs  int64  `toml:"max_extend_range_secs"`
 }
 
 // MetricsConfig is a collection of Metrics Collection configurations
