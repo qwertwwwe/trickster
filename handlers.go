@@ -718,7 +718,27 @@ func (t *TricksterHandler) originRangeProxyHandler(cacheKey string, originRangeR
 			t.respondToCacheHit(r)
 		} else if ctx.CacheLookupResult == crNotCache {
 			// just proxy the query request to origin prometheus.
-			t.promFullProxyHandler(r.Writer, r.Request)
+			queryURL := ctx.Origin.OriginURL + mnQueryRange
+			originParams := url.Values{}
+			passthroughParam(upQuery, ctx.RequestParams, originParams, nil)
+			passthroughParam(upTimeout, ctx.RequestParams, originParams, nil)
+			originParams.Add(upStep, ctx.StepParam)
+			originParams.Add(upStart, strconv.FormatInt(ctx.RequestExtents.Start/1000, 10))
+			originParams.Add(upEnd, strconv.FormatInt(ctx.RequestExtents.End/1000, 10))
+
+			body, resp, _, err := t.getURL(t.getOrigin(r.Request), r.Request.Method, queryURL, originParams, getProxyableClientHeaders(r.Request))
+			if err != nil {
+				level.Error(t.Logger).Log(lfEvent, "error fetching data from origin Prometheus", lfDetail, err.Error())
+				r.Writer.WriteHeader(http.StatusBadGateway)
+				return
+			}
+
+			for k, v := range resp.Header {
+				r.Writer.Header().Set(k, strings.Join(v, ","))
+			}
+
+			r.Writer.WriteHeader(resp.StatusCode)
+			r.Writer.Write(body)
 		} else {
 
 			// Now we know if we need to make any calls to the Origin, lets set those up
